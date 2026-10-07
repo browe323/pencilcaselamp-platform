@@ -6,19 +6,7 @@ on:
       app_name:
         required: true
         type: string
-      version_var:
-        required: true
-        type: string
-      container_name:
-        required: true
-        type: string
-      internal_port:
-        required: true
-        type: number
-      health_path:
-        required: false
-        type: string
-        default: /health/ready
+
       public_url:
         required: true
         type: string
@@ -44,21 +32,17 @@ jobs:
           /opt/pencilcaselamp/scripts/deploy-app \
             test \
             "${{ inputs.app_name }}" \
-            "${{ inputs.version_var }}" \
-            "${{ github.sha }}" \
-            "${{ inputs.container_name }}" \
-            "${{ inputs.internal_port }}" \
-            "${{ inputs.health_path }}"
+            "${{ github.sha }}"
 
   verify:
     needs: deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: External readiness check
+      - name: Verify readiness
         run: |
           curl --fail \
-            "${{ inputs.public_url }}${{ inputs.health_path }}"
+            "${{ inputs.public_url }}/health/ready"
 
       - name: Verify deployed SHA
         run: |
