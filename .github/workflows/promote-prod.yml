@@ -41,42 +41,17 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Update deployed version
+      - name: Deploy application
         shell: bash
         run: |
-          cd /opt/pencilcaselamp/platform/prod
-
-          sed -i \
-            "s/^${{ inputs.version_var }}=.*/${{ inputs.version_var }}=${{ inputs.sha }}/" \
-            .env
-
-      - name: Pull image
-        shell: bash
-        run: |
-          cd /opt/pencilcaselamp/platform/prod
-          docker compose pull "${{ inputs.app_name }}"
-
-      - name: Deploy
-        shell: bash
-        run: |
-          cd /opt/pencilcaselamp/platform/prod
-          docker compose up -d "${{ inputs.app_name }}"
-
-      - name: Wait for readiness
-        shell: bash
-        run: |
-          for i in {1..30}; do
-            if docker exec pencil-caddy wget -qO- \
-              "http://${{ inputs.container_name }}:${{ inputs.internal_port }}${{ inputs.health_path }}"; then
-              exit 0
-            fi
-
-            echo "Waiting for ${{ inputs.app_name }}..."
-            sleep 2
-          done
-
-          docker logs "${{ inputs.container_name }}"
-          exit 1
+          /opt/pencilcaselamp/scripts/deploy-app \
+            prod \
+            "${{ inputs.app_name }}" \
+            "${{ inputs.version_var }}" \
+            "${{ inputs.sha }}" \
+            "${{ inputs.container_name }}" \
+            "${{ inputs.internal_port }}" \
+            "${{ inputs.health_path }}"
 
   verify:
     needs: deploy
