@@ -1,0 +1,94 @@
+name: Deploy Test
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+      version_var:
+        required: true
+        type: string
+      container_name:
+        required: true
+        type: string
+      internal_port:
+        required: true
+        type: number
+      health_path:
+        required: false
+        type: string
+        default: /health/ready
+      public_url:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - linux
+
+    environment:
+      name: test
+      url: ${{ inputs.public_url }}
+
+    concurrency:
+      group: ${{ inputs.app_name }}-test
+      cancel-in-progress: false
+
+    steps:
+      - name: Update deployed version
+        shell: bash
+        run: |
+          cd /opt/pencilcaselamp/platform/test
+
+          sed -i \
+            "s/^${{ inputs.version_var }}=.*/${{ inputs.version_var }}=${{ github.sha }}/" \
+            .env
+
+      - name: Pull image
+        shell: bash
+        run: |
+          cd /opt/pencilcaselamp/platform/test
+          docker compose pull "${{ inputs.app_name }}"
+
+      - name: Deploy
+        shell: bash
+        run: |
+          cd /opt/pencilcaselamp/platform/test
+          docker compose up -d "${{ inputs.app_name }}"
+
+      - name: Wait for readiness
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if docker exec pencil-caddy wget -qO- \
+              "http://${{ inputs.container_name }}:${{ inputs.internal_port }}${{ inputs.health_path }}"; then
+              exit 0
+            fi
+
+            echo "Waiting for ${{ inputs.app_name }}..."
+            sleep 2
+          done
+
+          docker logs "${{ inputs.container_name }}"
+          exit 1
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: External readiness check
+        run: |
+          curl --fail \
+            "${{ inputs.public_url }}${{ inputs.health_path }}"
+
+      - name: Verify deployed SHA
+        run: |
+          response=$(curl --fail \
+            "${{ inputs.public_url }}/api/version")
+
+          echo "$response"
+          echo "$response" | grep "${{ github.sha }}"
